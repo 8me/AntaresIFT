@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -53,31 +54,34 @@ def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
     a0 = d[0] @ amplitudes[0]
     a1 = d[1] @ amplitudes[1]
 
-
     # a = [dd @ amplitudes[ii] for ii, dd in enumerate(d)]
     # a = functools.reduce(operator.mul, [a0, a1])
     a = a0 * a1
     A = pd @ a
     # For `vol` see comment in `CorrelatedField`
     vol = functools.reduce(operator.mul, [sp.scalar_dvol**-0.5 for sp in hsp])
-    return ht(vol*A*ift.ducktape(hsp, None, name))
+    return ht(vol * A * ift.ducktape(hsp, None, name))
 
 
 if __name__ == '__main__':
     np.random.seed(420)
 
-    sky_domain = ift.RGSpace((300, 300), (2/300, 2*np.pi/200))
+    sky_domain = ift.RGSpace((300, 300), (2 / 300, 2 * np.pi / 200))
     energy_domain = ift.RGSpace(10)
     # lambda_domain = ift.RGSpace((20,), (0.5,))
-    time_domain = ift.RGSpace((500,))
-    position_space = ift.DomainTuple.make((sky_domain, energy_domain,)) # lambda_domain, time_domain))
+    time_domain = ift.RGSpace((500, ))
+    position_space = ift.DomainTuple.make((
+        sky_domain,
+        energy_domain,
+    ))  # lambda_domain, time_domain))
 
     harmonic_space_sky = sky_domain.get_default_codomain()
     ht_sky = ift.HarmonicTransformOperator(harmonic_space_sky, sky_domain)
     power_space_sky = ift.PowerSpace(harmonic_space_sky)
 
     harmonic_space_energy = energy_domain.get_default_codomain()
-    ht_energy = ift.HarmonicTransformOperator(harmonic_space_energy, energy_domain)
+    ht_energy = ift.HarmonicTransformOperator(harmonic_space_energy,
+                                              energy_domain)
     power_space_energy = ift.PowerSpace(harmonic_space_energy)
 
     # Set up an amplitude operator for the field
@@ -93,7 +97,7 @@ if __name__ == '__main__':
         'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
         'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
-        'iv': .3,   # y-intercept variance
+        'iv': .3,  # y-intercept variance
         'keys': ['tau_sky', 'phi_sky']
     }
 
@@ -108,8 +112,8 @@ if __name__ == '__main__':
         # Power-law part of spectrum:
         'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im':  -10,  # y-intercept mean, in-/decrease for more/less contrast
-        'iv': .3,   # y-intercept variance
+        'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': .3,  # y-intercept variance
         'keys': ['tau_energy', 'phi_energy']
     }
 
@@ -127,9 +131,12 @@ if __name__ == '__main__':
 
     # Build the line-of-sight response and define signal response
 
-    efficiency = ift.Field(ift.makeDomain(energy_domain), val=np.ones(energy_domain.shape))
+    efficiency = ift.Field(ift.makeDomain(energy_domain),
+                           val=np.ones(energy_domain.shape))
     # R = ift.makeOp(efficiency)
-    R = ift.DiagonalOperator(diagonal=efficiency, domain=position_space, spaces=1)
+    R = ift.DiagonalOperator(diagonal=efficiency,
+                             domain=position_space,
+                             spaces=1)
     lamb = R(signal)
 
     # Specify noise
@@ -146,8 +153,9 @@ if __name__ == '__main__':
 
     # Minimization parameters
     ic_sampling = ift.GradientNormController(iteration_limit=100)
-    ic_newton = ift.GradInfNormController(
-        name='Newton', tol=1e-7, iteration_limit=35)
+    ic_newton = ift.GradInfNormController(name='Newton',
+                                          tol=1e-7,
+                                          iteration_limit=35)
     minimizer = ift.NewtonCG(ic_newton)
 
     # Set up likelihood and information Hamiltonian
@@ -170,9 +178,10 @@ if __name__ == '__main__':
         # Plot current reconstruction
         plot = ift.Plot()
         plot.add(A_nu_sky(KL.position), title="reconstruction")
-        plot.add([A_nu_sky.force(KL.position), A_nu_sky.force(mock_position)], title="sky_power")
-        plot.output(ny=1, ysize=6, xsize=16,
-                    name='sky_power' + str(_))
+        plot.add([A_nu_sky.force(KL.position),
+                  A_nu_sky.force(mock_position)],
+                 title="sky_power")
+        plot.output(ny=1, ysize=6, xsize=16, name='sky_power' + str(_))
 
     # Draw posterior samples
     KL = ift.MetricGaussianKL(mean, H, N_samples)
@@ -181,17 +190,16 @@ if __name__ == '__main__':
         sc.add(signal(sample + KL.position))
 
     # Plotting
-   # filename_res = filename.format("results")
-    #plot = ift.Plot()
-    #plot.add(sc.mean, title="Posterior Mean")
-    #plot.add(ift.sqrt(sc.var), title="Posterior Standard Deviation")
+# filename_res = filename.format("results")
+#plot = ift.Plot()
+#plot.add(sc.mean, title="Posterior Mean")
+#plot.add(ift.sqrt(sc.var), title="Posterior Standard Deviation")
 
-    #powers = [A.force(s + KL.position) for s in KL.samples]
-    #plot.add(
-    #    powers + [A.force(KL.position),
-    #              A.force(mock_position)],
-    #    title="Sampled Posterior Power Spectrum",
-    #    linewidth=[1.]*len(powers) + [3., 3.])
-    #plot.output(ny=1, nx=3, xsize=24, ysize=6, name=filename_res)
-    #print("Saved results as '{}'.".format(filename_res))
-
+#powers = [A.force(s + KL.position) for s in KL.samples]
+#plot.add(
+#    powers + [A.force(KL.position),
+#              A.force(mock_position)],
+#    title="Sampled Posterior Power Spectrum",
+#    linewidth=[1.]*len(powers) + [3., 3.])
+#plot.output(ny=1, nx=3, xsize=24, ysize=6, name=filename_res)
+#print("Saved results as '{}'.".format(filename_res))
