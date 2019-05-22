@@ -2,7 +2,6 @@
 
 import numpy as np
 import functools
-import operator
 import nifty5 as ift
 
 
@@ -10,27 +9,29 @@ def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
     tgt = ift.DomainTuple.make(target)
 
     hsp = ift.DomainTuple.make([tt.get_default_codomain() for tt in tgt])
-    ht1 = ift.HarmonicTransformOperator(hsp, target=tgt[0], space=0)
-    ht2 = ift.HarmonicTransformOperator(ht1.target, target=tgt[1], space=1)
-    ht = ht2 @ ht1
+    ht = ift.HarmonicTransformOperator(hsp, target=tgt[0], space=0)
+    for i in range(1, len(tgt)):
+        ht_add = ift.HarmonicTransformOperator(ht.target, target=tgt[i], space=i)
+        ht = ht_add @ ht
 
     psp = [aa.target[0] for aa in amplitudes]
-    pd0 = ift.PowerDistributor(hsp, psp[0], 0)
-    pd1 = ift.PowerDistributor(pd0.domain, psp[1], 1)
-    pd = pd0 @ pd1
+    pd = ift.PowerDistributor(hsp, psp[0], 0)
+    for i in range(1, len(tgt)):
+        pd_add = ift.PowerDistributor(pd.domain, psp[i], i)
+        pd = pd @ pd_add
 
-    dd0 = ift.ContractionOperator(pd.domain, 1).adjoint
-    dd1 = ift.ContractionOperator(pd.domain, 0).adjoint
-    d = [dd0, dd1]
 
-    a0 = d[0] @ amplitudes[0]
-    a1 = d[1] @ amplitudes[1]
+    spaces = np.arange(len(tgt))
+    d = [ift.ContractionOperator(pd.domain, list(np.delete(spaces, i))).adjoint for i in range(len(tgt)) ]
 
-    # a = [dd @ amplitudes[ii] for ii, dd in enumerate(d)]
-    # a = functools.reduce(operator.mul, [a0, a1])
-    a = a0 * a1
+    a_l = [dd @ amplitudes[ii] for ii, dd in enumerate(d)]
+    a = a_l[0]
+    for i in range(1, len(tgt)):
+        a = a * a_l[i]
+    #a = a0 * a1
     A = pd @ a
     # For `vol` see comment in `CorrelatedField`
+    import operator
     vol = functools.reduce(operator.mul, [sp.scalar_dvol**-0.5 for sp in hsp])
     return ht(vol * A * ift.ducktape(hsp, None, name))
 
@@ -39,12 +40,13 @@ if __name__ == '__main__':
     np.random.seed(23)
 
     sky_domain = ift.RGSpace((300, 300), (2 / 300, 2 * np.pi / 200))
-    energy_domain = ift.RGSpace(10)
+    energy_domain = ift.RGSpace((10,))
     # lambda_domain = ift.RGSpace((20,), (0.5,))
-    time_domain = ift.RGSpace((500, ))
+    time_domain = ift.RGSpace((40, ))
     position_space = ift.DomainTuple.make((
         sky_domain,
         energy_domain,
+        time_domain
     ))  # lambda_domain, time_domain))
 
     harmonic_space_sky = sky_domain.get_default_codomain()
@@ -56,8 +58,14 @@ if __name__ == '__main__':
                                               energy_domain)
     power_space_energy = ift.PowerSpace(harmonic_space_energy)
 
+    harmonic_space_time = time_domain.get_default_codomain()
+    ht_time = ift.HarmonicTransformOperator(harmonic_space_time,
+                                              time_domain)
+    power_space_time = ift.PowerSpace(harmonic_space_time)
+
+
     # Set up an amplitude operator for the field
-    dct_sky = {
+    dct_nu_sky = {
         'target': power_space_sky,
         'n_pix': 16,  # 64 spectral bins
 
@@ -70,7 +78,55 @@ if __name__ == '__main__':
         'sv': .5,  # low variance of power-law slope
         'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': .3,  # y-intercept variance
-        'keys': ['tau_sky', 'phi_sky']
+        'keys': ['tau_nu_sky', 'phi_nu_sky']
+    }
+
+    dct_mu_sky = {
+        'target': power_space_sky,
+        'n_pix': 16,  # 64 spectral bins
+
+        # Spectral smoothness (affects Gaussian process part)
+        'a': 3,  # relatively high variance of spectral curbvature
+        'k0': .4,  # quefrency mode below which cepstrum flattens
+
+        # Power-law part of spectrum:
+        'sm': -5,  # preferred power-law slope
+        'sv': .5,  # low variance of power-law slope
+        'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': .3,  # y-intercept variance
+        'keys': ['tau_mu_sky', 'phi_mu_sky']
+    }
+
+    dct_mu_time = {
+        'target': power_space_time,
+        'n_pix': 16,  # 64 spectral bins
+
+        # Spectral smoothness (affects Gaussian process part)
+        'a': 3,  # relatively high variance of spectral curbvature
+        'k0': .4,  # quefrency mode below which cepstrum flattens
+
+        # Power-law part of spectrum:
+        'sm': -5,  # preferred power-law slope
+        'sv': .5,  # low variance of power-law slope
+        'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': .3,  # y-intercept variance
+        'keys': ['tau_mu_time', 'phi_mu_time']
+    }
+
+    dct_nu_time = {
+        'target': power_space_time,
+        'n_pix': 16,  # 64 spectral bins
+
+        # Spectral smoothness (affects Gaussian process part)
+        'a': 3,  # relatively high variance of spectral curbvature
+        'k0': .4,  # quefrency mode below which cepstrum flattens
+
+        # Power-law part of spectrum:
+        'sm': -5,  # preferred power-law slope
+        'sv': .5,  # low variance of power-law slope
+        'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': .3,  # y-intercept variance
+        'keys': ['tau_nu_time', 'phi_nu_time']
     }
 
     dct_energy = {
@@ -92,14 +148,17 @@ if __name__ == '__main__':
         'keys': ['tau_energy', 'phi_energy']
     }
 
-    A_nu_sky = ift.SLAmplitude(**dct_sky)
+    A_nu_sky = ift.SLAmplitude(**dct_nu_sky)
     A_nu_energy = ift.SLAmplitude(**dct_energy)
-    rho_nu = MfCorrelatedFieldAntares(position_space, (A_nu_sky, A_nu_energy))
+    A_nu_time = ift.SLAmplitude(**dct_nu_time)
+    rho_nu = MfCorrelatedFieldAntares(position_space, (A_nu_sky, A_nu_energy,
+                                                       A_nu_time
+                                                       ))
 
-    A_mu_sky = ift.SLAmplitude(**dct_sky)
+    A_mu_sky = ift.SLAmplitude(**dct_mu_sky)
     A_mu_energy = ift.SLAmplitude(**dct_energy)
-
-    rho_mu = MfCorrelatedFieldAntares(position_space, (A_mu_sky, A_mu_energy))
+    A_mu_time = ift.SLAmplitude(**dct_mu_time)
+    rho_mu = MfCorrelatedFieldAntares(position_space, (A_mu_sky, A_mu_energy, A_mu_time))
 
     # Apply a nonlinearity
 
@@ -131,7 +190,7 @@ if __name__ == '__main__':
     ic_sampling = ift.GradientNormController(iteration_limit=100)
     ic_newton = ift.GradInfNormController(name='Newton',
                                           tol=1e-7,
-                                          iteration_limit=35)
+                                          iteration_limit=5)
     minimizer = ift.NewtonCG(ic_newton)
 
     # Set up likelihood and information Hamiltonian
@@ -145,10 +204,12 @@ if __name__ == '__main__':
     N_samples = 6
 
     plot = ift.Plot()
-    contr0 = ift.ContractionOperator(position_space, 0)
-    contr1 = ift.ContractionOperator(position_space, 1)
-    plot.add(contr1(data), title="sky data")
-    plot.add(contr0(data), title="energy data")
+    contr0 = ift.ContractionOperator(position_space, (1, 2))
+    contr1 = ift.ContractionOperator(position_space, (0, 2))
+    contr2 = ift.ContractionOperator(position_space, (0, 1))
+    plot.add(contr0(data), title="sky data")
+    plot.add(contr1(data), title="energy data")
+    plot.add(contr2(data), title="time data")
     plot.output(ny=1, ysize=6, xsize=16,
                 name='data' + '.png')
 
