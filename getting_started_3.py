@@ -32,6 +32,7 @@ import functools
 import operator
 import nifty5 as ift
 
+
 def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
     tgt = ift.DomainTuple.make(target)
 
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     # Set up an amplitude operator for the field
     dct_sky = {
         'target': power_space_sky,
-        'n_pix': 64,  # 64 spectral bins
+        'n_pix': 16,  # 64 spectral bins
 
         # Spectral smoothness (affects Gaussian process part)
         'a': 3,  # relatively high variance of spectral curbvature
@@ -91,14 +92,14 @@ if __name__ == '__main__':
         # Power-law part of spectrum:
         'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im':  0,  # y-intercept mean, in-/decrease for more/less contrast
+        'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': .3,   # y-intercept variance
         'keys': ['tau_sky', 'phi_sky']
     }
 
     dct_energy = {
         'target': power_space_energy,
-        'n_pix': 64,  # 64 spectral bins
+        'n_pix': 16,  # 64 spectral bins
 
         # Spectral smoothness (affects Gaussian process part)
         'a': 3,  # relatively high variance of spectral curbvature
@@ -107,7 +108,7 @@ if __name__ == '__main__':
         # Power-law part of spectrum:
         'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im':  0,  # y-intercept mean, in-/decrease for more/less contrast
+        'im':  -10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': .3,   # y-intercept variance
         'keys': ['tau_energy', 'phi_energy']
     }
@@ -127,7 +128,8 @@ if __name__ == '__main__':
     # Build the line-of-sight response and define signal response
 
     efficiency = ift.Field(ift.makeDomain(energy_domain), val=np.ones(energy_domain.shape))
-    R = ift.makeOp(efficiency)
+    # R = ift.makeOp(efficiency)
+    R = ift.DiagonalOperator(diagonal=efficiency, domain=position_space, spaces=1)
     lamb = R(signal)
 
     # Specify noise
@@ -137,7 +139,7 @@ if __name__ == '__main__':
     N = ift.ScalingOperator(noise, data_space)
 
     # Generate mock signal and data
-    mock_position = ift.from_random('normal', position_space)
+    mock_position = ift.from_random('normal', lamb.domain)
     data = lamb(mock_position)
     data = np.random.poisson(data.to_global_data().astype(np.float64))
     data = ift.Field.from_global_data(data_space, data)
@@ -166,11 +168,11 @@ if __name__ == '__main__':
         mean = KL.position
 
         # Plot current reconstruction
-        #plot = ift.Plot()
-        #plot.add(signal(KL.position), title="reconstruction")
-        #plot.add([A.force(KL.position), A.force(mock_position)], title="power")
-        #plot.output(ny=1, ysize=6, xsize=16,
-        #            name=filename.format("loop_{:02d}".format(i)))
+        plot = ift.Plot()
+        plot.add(A_nu_sky(KL.position), title="reconstruction")
+        plot.add([A_nu_sky.force(KL.position), A_nu_sky.force(mock_position)], title="sky_power")
+        plot.output(ny=1, ysize=6, xsize=16,
+                    name='sky_power' + str(_))
 
     # Draw posterior samples
     KL = ift.MetricGaussianKL(mean, H, N_samples)
