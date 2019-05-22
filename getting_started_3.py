@@ -64,7 +64,7 @@ def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
 
 
 if __name__ == '__main__':
-    np.random.seed(420)
+    np.random.seed(23)
 
     sky_domain = ift.RGSpace((300, 300), (2/300, 2*np.pi/200))
     energy_domain = ift.RGSpace(10)
@@ -108,7 +108,8 @@ if __name__ == '__main__':
         # Power-law part of spectrum:
         'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im':  -10,  # y-intercept mean, in-/decrease for more/less contrast
+        'im':
+            -10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': .3,   # y-intercept variance
         'keys': ['tau_energy', 'phi_energy']
     }
@@ -121,6 +122,7 @@ if __name__ == '__main__':
     A_mu_energy = ift.SLAmplitude(**dct_energy)
 
     rho_mu = MfCorrelatedFieldAntares(position_space, (A_mu_sky, A_mu_energy))
+
     # Apply a nonlinearity
 
     signal = ift.exp(rho_nu) + ift.exp(rho_mu)
@@ -160,6 +162,22 @@ if __name__ == '__main__':
     # number of samples used to estimate the KL
     N_samples = 6
 
+    plot = ift.Plot()
+    contr0 = ift.ContractionOperator(position_space, 0)
+    contr1 = ift.ContractionOperator(position_space, 1)
+    plot.add(contr1(data), title="sky data")
+    plot.add(contr0(data), title="energy data")
+    plot.output(ny=1, ysize=6, xsize=16,
+                name='data' + '.png')
+
+    plot = ift.Plot()
+    plot.add(contr1(rho_nu.force(mock_position)), title="nu, marginalized over energy")
+    plot.add([A_nu_sky.force(mock_position), A_nu_sky.force(mock_position)], title="nu_sky_power")
+    plot.add(contr1(rho_mu.force(mock_position)), title="mu, marginalized over energy")
+    plot.add([A_mu_sky.force(mock_position), A_mu_sky.force(mock_position)], title="mu_sky_power")
+    plot.output(ny=2, ysize=6, xsize=16,
+                name='truth.png')
+
     # Draw new samples to approximate the KL five times
     for i in range(5):
         # Draw new samples and minimize KL
@@ -169,10 +187,12 @@ if __name__ == '__main__':
 
         # Plot current reconstruction
         plot = ift.Plot()
-        plot.add(A_nu_sky(KL.position), title="reconstruction")
-        plot.add([A_nu_sky.force(KL.position), A_nu_sky.force(mock_position)], title="sky_power")
-        plot.output(ny=1, ysize=6, xsize=16,
-                    name='sky_power' + str(_))
+        plot.add(contr1(rho_nu.force(KL.position)), title="nu, marginalized over energy")
+        plot.add([A_nu_sky.force(KL.position), A_nu_sky.force(mock_position)], title="nu_sky_power")
+        plot.add(contr0(rho_mu.force(KL.position)), title="mu, marginalized over energy")
+        plot.add([A_mu_sky.force(KL.position), A_mu_sky.force(mock_position)], title="mu_sky_power")
+        plot.output(ny=2, ysize=6, xsize=16,
+                    name='iteration_' + str(i) + '.png')
 
     # Draw posterior samples
     KL = ift.MetricGaussianKL(mean, H, N_samples)
