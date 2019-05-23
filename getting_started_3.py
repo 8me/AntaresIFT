@@ -4,6 +4,7 @@ import numpy as np
 import functools
 import nifty5 as ift
 import h5py
+import sys
 
 
 def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
@@ -57,10 +58,10 @@ if __name__ == '__main__':
     np.random.seed(23)
 
     # sky_domain = ift.RGSpace((300, 300), (2 / 300, 2 * np.pi / 200))
-    sky_domain = ift.HPSpace(nside=2**4)
+    sky_domain = ift.HPSpace(nside=2**3)
     energy_domain = ift.RGSpace((10, ))
     lambda_domain = ift.RGSpace((20, ), (0.1, ))
-    time_domain = ift.RGSpace((500, ))
+    time_domain = ift.RGSpace((50, ))
     position_space = ift.DomainTuple.make(
         (lambda_domain, time_domain, sky_domain,
          energy_domain))  # lambda_domain, time_domain))
@@ -215,7 +216,7 @@ if __name__ == '__main__':
         'iv': .3,  # y-intercept variance
         'im': -10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': .3,  # y-intercept variance
-        'keys': ['tau_nu_energy', 'phi_nu_energy']
+        'keys': ['tau_nu_lambda', 'phi_nu_lambda']
     }
 
     A_nu_sky = ift.SLAmplitude(**dct_nu_sky)
@@ -223,13 +224,16 @@ if __name__ == '__main__':
     A_nu_time = ift.SLAmplitude(**dct_nu_time)
     A_nu_lambda = ift.SLAmplitude(**dct_nu_lambda)
     rho_nu = MfCorrelatedFieldAntares(
-        position_space, (A_nu_lambda, A_nu_time, A_nu_sky, A_nu_energy))
+        position_space, (A_nu_lambda, A_nu_time, A_nu_sky, A_nu_energy),
+        'xi_nu')
 
     A_mu_sky = ift.SLAmplitude(**dct_mu_sky)
     A_mu_energy = ift.SLAmplitude(**dct_mu_energy)
     A_mu_time = ift.SLAmplitude(**dct_mu_time)
+    A_mu_lambda = ift.SLAmplitude(**dct_mu_lambda)
     rho_mu = MfCorrelatedFieldAntares(
-        position_space, (A_mu_lambda, A_mu_time, A_mu_sky, A_mu_energy))
+        position_space, (A_mu_lambda, A_mu_time, A_mu_sky, A_mu_energy),
+        'xi_mu')
 
     # Apply a nonlinearity
 
@@ -237,14 +241,13 @@ if __name__ == '__main__':
 
     # Build the line-of-sight response and define signal response
 
-    efficiency = ift.Field(ift.makeDomain(energy_domain),
-                           val=np.ones(energy_domain.shape))
+    efficiency = ift.Field(ift.makeDomain(time_domain),
+                           val=np.ones(time_domain.shape))
     # R = ift.makeOp(efficiency)
     R = ift.DiagonalOperator(diagonal=efficiency,
                              domain=position_space,
                              spaces=1)
     lamb = R(signal)
-
     # Specify noise
     data_space = position_space
 
@@ -293,7 +296,7 @@ if __name__ == '__main__':
              title="mu, marginalized over sky")
     plot.add(A_mu_sky.force(mock_position), title="mu_sky_power")
     plot.output(ny=2, ysize=6, xsize=16, name='truth.png')
-
+    sys.exit()
     # Draw new samples to approximate the KL five times
     for i in range(5):
         # Draw new samples and minimize KL
