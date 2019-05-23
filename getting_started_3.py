@@ -7,6 +7,53 @@ import h5py
 import sys
 
 
+def find_parameters(sm_list, d, space, htlist, contactorlist, plotting=False):
+    current_energy_value = np.inf
+    for ii in range(2, 30):
+        sky = ift.InverseGammaOperator(space, 0.5, 10 ** ii)
+        lh = ift.PoissonianEnergy(d) @ sky
+        pos = ift.full(lh.domain, 0)
+        e = ift.EnergyAdapter(
+            pos, ift.StandardHamiltonian(lh), want_metric=True)
+        mini = ift.NewtonCG(
+            ift.GradInfNormController(
+                1e-7, convergence_level=3, iteration_limit=20))
+        e, _ = mini(e)
+        skymodel = sky(e.position)
+
+        im_list = []
+        zm_list = []
+        zmvar_list = []
+        for jj, c in enumerate(contactorlist):
+            ht = htlist[jj]
+            pspec = ift.power_analyze(ht.adjoint(c(ift.log(skymodel))))
+            t0 = np.log(pspec.domain[0].k_lengths[1])
+            try:
+                im = np.log(pspec.to_global_data()[1]) - t0 * sm_list[jj]
+                im_list.append(im)
+            except FloatingPointError:
+                im_list.append(None)
+
+            zm = skymodel.log().integrate()
+            zm_list.append(zm)
+            zmvar = (skymodel.log() * 0 + 2).integrate()
+            zmvar_list.append(zmvar)
+
+        #if plotting:
+        #    p = ift.Plot()
+        #    p.add(
+        #        skymodel, norm=LogNorm(), title=skymodel.log().integrate())
+        #    p.add(pspec, label='Power analyze')
+        #    fname = join(self.out, 'debug{}.png'.format(ii))
+        #    p.output(name=fname, ny=1, xsize=16, ysize=8)
+        if e.value > current_energy_value:
+            break
+        current_energy_value = e.value
+    print('Found parameters:\nim = {}\nzm = {}\nzmvar = {}'.format(
+        im_list, zm_list, zmvar_list))
+    return im, zm, zmvar, skymodel
+
+
 def MfCorrelatedFieldAntares(target, amplitudes, name='xi'):
     tgt = ift.DomainTuple.make(target)
 
@@ -66,6 +113,7 @@ if __name__ == '__main__':
         (lambda_domain, time_domain, sky_domain,
          energy_domain))  # lambda_domain, time_domain))
 
+
     harmonic_space_sky = sky_domain.get_default_codomain()
     ht_sky = ift.HarmonicTransformOperator(harmonic_space_sky, sky_domain)
     power_space_sky = ift.PowerSpace(harmonic_space_sky)
@@ -83,6 +131,14 @@ if __name__ == '__main__':
     ht_lambda = ift.HarmonicTransformOperator(harmonic_space_lambda,
                                               lambda_domain)
     power_space_lambda = ift.PowerSpace(harmonic_space_lambda)
+
+    ht_list = [ht_lambda, ht_time, ht_sky, ht_energy]
+    contr0 = ift.ContractionOperator(position_space, (0, 1, 3))
+    contr1 = ift.ContractionOperator(position_space, (0, 1, 2))
+    contr2 = ift.ContractionOperator(position_space, (0, 2, 3))
+    contr3 = ift.ContractionOperator(position_space, (1, 2, 3))
+    contractor_list = [contr3, contr2, contr0, contr1]
+
     # Set up an amplitude operator for the field
     dct_nu_sky = {
         'target': power_space_sky,
@@ -255,11 +311,14 @@ if __name__ == '__main__':
     N = ift.ScalingOperator(noise, data_space)
 
     # Generate mock signal and data
+
     mock_position = ift.from_random('normal', lamb.domain)
     data = lamb(mock_position)
     data = np.random.poisson(data.to_global_data().astype(np.float64))
     data = ift.Field.from_global_data(data_space, data)
+    find_parameters([2,2,2,2], data, position_space, ht_list, contractor_list)
 
+    sys.exit()
     # Minimization parameters
     ic_sampling = ift.GradientNormController(iteration_limit=100)
     ic_newton = ift.GradInfNormController(name='Newton',
@@ -278,10 +337,6 @@ if __name__ == '__main__':
     N_samples = 6
 
     plot = ift.Plot()
-    contr0 = ift.ContractionOperator(position_space, (0, 1, 3))
-    contr1 = ift.ContractionOperator(position_space, (0, 1, 2))
-    contr2 = ift.ContractionOperator(position_space, (0, 2, 3))
-    contr3 = ift.ContractionOperator(position_space, (1, 2, 3))
     plot.add(contr0(data), title="sky data")
     plot.add(contr1(data), title="energy data")
     plot.add(contr2(data), title="time data")
