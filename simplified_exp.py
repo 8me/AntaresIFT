@@ -11,7 +11,8 @@ class sexp(ift.Operator):
     def _sexp(self, x):
         retval = np.zeros(x.shape)
         mask = x > self._y
-        retval[mask] = x[mask] - self._y
+        # retval[mask] = x[mask] - self._y + 1
+        retval[mask] = 0.5*(x[mask] - self._y + 1)**2
         retval[np.logical_not(mask)] = np.exp(x[np.logical_not(mask)] -
                                               self._y)
         return retval
@@ -19,7 +20,8 @@ class sexp(ift.Operator):
     def _sexp_bar(self, x):
         retval = np.zeros(x.shape)
         mask = x > self._y
-        retval[mask] = 1
+        # retval[mask] = 1
+        retval[mask] = (x[mask] - self._y + 1)
         retval[np.logical_not(mask)] = np.exp(x[np.logical_not(mask)] -
                                               self._y)
         return retval

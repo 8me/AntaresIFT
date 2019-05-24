@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
-import numpy as np
 import functools
-import nifty5 as ift
+
 import h5py
-from tqdm import tqdm
 import healpy as hp
 import km3pipe as kp
-import sys
+import numpy as np
+import nifty5 as ift
 from simplified_exp import sexp
+
+from SImplifiedSLAmplitude import *
 
 log = kp.logger.get_logger('IFT')
 log.setLevel('INFO')
@@ -139,6 +140,8 @@ if __name__ == '__main__':
     position_space = ift.DomainTuple.make(
         (sky_domain, energy_domain))  # lambda_domain, time_domain))
 
+    data_space = ift.DomainTuple.make(
+        (sky_domain,     energy_domain))
     harmonic_space_sky = sky_domain.get_default_codomain()
     ht_sky = ift.HarmonicTransformOperator(harmonic_space_sky, sky_domain)
     power_space_sky = ift.PowerSpace(harmonic_space_sky)
@@ -158,9 +161,9 @@ if __name__ == '__main__':
     # power_space_lambda = ift.PowerSpace(harmonic_space_lambda)
 
     ht_list = [ht_sky, ht_energy]
-    contr0 = ift.ContractionOperator(position_space, (1, ))
+    contr0 = ift.ContractionOperator(data_space, (1, ))
     # contr1 = ift.ContractionOperator(position_space, (0, ))
-    contr2 = ift.ContractionOperator(position_space, (0, ))
+    contr2 = ift.ContractionOperator(data_space, (0, ))
     # contr3 = ift.ContractionOperator(position_space, (1, 2, 3))
     contractor_list = [contr0, contr2]
 
@@ -170,14 +173,14 @@ if __name__ == '__main__':
         'n_pix': 16,  # 64 spectral bins
 
         # Spectral smoothness (affects Gaussian process part)
-        'a': 3,  # relatively high variance of spectral curbvature
+        'a': 2,  # relatively high variance of spectral curbvature
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -3,  # preferred power-law slope
+        'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im': 5,  # y-intercept mean, in-/decrease for more/less contrast
-        'iv': .3,  # y-intercept variance
+        'im': 10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': 2,  # y-intercept variance
         'keys': ['tau_nu_sky', 'phi_nu_sky']
     }
 
@@ -186,14 +189,14 @@ if __name__ == '__main__':
         'n_pix': 16,  # 64 spectral bins
 
         # Spectral smoothness (affects Gaussian process part)
-        'a': 3,  # relatively high variance of spectral curbvature
+        'a': 2,  # relatively high variance of spectral curbvature
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -3,  # preferred power-law slope
+        'sm': -5,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
-        'im': 5,  # y-intercept mean, in-/decrease for more/less contrast
-        'iv': .3,  # y-intercept variance
+        'im': 10,  # y-intercept mean, in-/decrease for more/less contrast
+        'iv': 2,  # y-intercept variance
         'keys': ['tau_mu_sky', 'phi_mu_sky']
     }
 
@@ -238,9 +241,9 @@ if __name__ == '__main__':
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -7,  # preferred power-law slope
+        'sm': -5,  # preferred power-law slope
         'sv': 2,  # low variance of power-law slope
-        'im': 0,  # y-intercept mean, in-/decrease for more/less contrast
+        'im': 3,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': 2,  # y-intercept variance
         'keys': ['tau_mu_energy', 'phi_mu_energy']
     }
@@ -254,9 +257,9 @@ if __name__ == '__main__':
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -7,  # preferred power-law slope
+        'sm': -5,  # preferred power-law slope
         'sv': 2,  # low variance of power-law slope
-        'im': 0,  # y-intercept mean, in-/decrease for more/less contrast
+        'im': 3,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': 2,  # y-intercept variance
         'keys': ['tau_nu_energy', 'phi_nu_energy']
     }
@@ -296,13 +299,15 @@ if __name__ == '__main__':
     #     'keys': ['tau_nu_lambda', 'phi_nu_lambda']
     # }
 
-    A_nu_sky = ift.SLAmplitude(**dct_nu_sky)
-    A_nu_energy = ift.SLAmplitude(**dct_nu_energy)
+    # A_nu_sky = ift.SLAmplitude(**dct_nu_sky)
+    A_nu_sky = SimpSLAmplitude(**dct_nu_sky)
+    A_nu_energy = SimpSLAmplitude(**dct_nu_energy)
     # A_nu_time = ift.SLAmplitude(**dct_nu_time)
     # A_nu_lambda = ift.SLAmplitude(**dct_nu_lambda)
     rho_nu = MfCorrelatedFieldAntares(position_space, (A_nu_sky, A_nu_energy),
                                       'xi_nu')
 
+    # rho_nu = ift.CorrelatedField(position_space, A_nu_sky)
     A_mu_sky = ift.SLAmplitude(**dct_mu_sky)
     A_mu_energy = ift.SLAmplitude(**dct_mu_energy)
     # A_mu_time = ift.SLAmplitude(**dct_mu_time)
@@ -318,15 +323,16 @@ if __name__ == '__main__':
     R = ift.DiagonalOperator(diagonal=muon_distribution,
                              domain=position_space,
                              spaces=0)
-    sexp_operator = sexp(position_space, 20)
-    signal = sexp_operator(rho_nu)  #+ R(sexp_operator(rho_mu))
-
+    sexp_op = sexp(position_space, 1)
+    ift.extra.check_jacobian_consistency(sexp_op, ift.from_random('normal', sexp_op.domain))
+    signal = sexp_op(rho_nu) + R(sexp_op(rho_mu))
+    # signal = ift.exp(rho_nu)
     log.info('Signal ready')
     # Build the line-of-sight response and define signal response
 
     lamb = signal
     # Specify noise
-    data_space = position_space
+    # data_space = position_space
 
     noise = .001
     N = ift.ScalingOperator(noise, data_space)
@@ -343,8 +349,9 @@ if __name__ == '__main__':
     data = ift.Field.from_global_data(data_space, file_data)
     log.info('File data loaded')
 
-    plot_pspec(position_space, data, ht_list, contractor_list,
+    plot_pspec(data_space, data, ht_list, contractor_list,
                ['sky', 'energy'])
+    # data = contr0(data)
 
     # find_parameters([-2, -5],
     #                 data,
@@ -355,65 +362,80 @@ if __name__ == '__main__':
     # Minimization parameters
     ic_sampling = ift.GradientNormController(iteration_limit=100)
     ic_newton = ift.GradInfNormController(name='Newton',
-                                          tol=1e-7,
+                                          tol=1e-15,
                                           iteration_limit=15)
     minimizer = ift.NewtonCG(ic_newton)
     log.info('Minimizer setup ready')
 
     # Set up likelihood and information Hamiltonian
-    likelihood = ift.PoissonianEnergy(data)(lamb)
+    add_one = ift.Adder(ift.Field.full(lamb.target, 1.))
+    likelihood = ift.PoissonianEnergy(data)(add_one(lamb))
     H = ift.StandardHamiltonian(likelihood, ic_sampling)
 
-    initial_mean = ift.MultiField.full(H.domain, 0.)
-    mean = initial_mean  #mock_position
+    # initial_mean = ift.MultiField.full(H.domain, 0.)
+    mean = mock_position
 
     # number of samples used to estimate the KL
     N_samples = 8
 
     plot = ift.Plot()
 
+    add_s = ift.Adder(ift.Field(ift.makeDomain(sky_domain), 1))
+    add_e = ift.Adder(ift.Field(ift.makeDomain(energy_domain), 1))
     plot.add(contr0(data), title="sky data")
+    plot.add(ift.log(add_s(contr0(data))), title="log 1 + sky data")
     plot.add(contr2(data), title="energy data")
+    plot.add(ift.log(add_e(contr2(data))), title="log 1 + energy data")
     # plot.add(contr1(data), title="time data")
     # plot.add(contr3(data), title="lambda data")
-    plot.output(ny=1, ysize=6, xsize=16, name='data' + '.png')
+    plot.output(ny=2, ysize=6, xsize=16, name='data' + '.png')
 
     try:
         plot = ift.Plot()
-        plot.add(contr0(sexp_operator(rho_nu.force(mock_position))),
+        plot.add(contr0(sexp_op(rho_nu.force(mock_position))),
                  title="nu, sky data")
         plot.add(A_nu_sky.force(mock_position), title="nu_sky_power")
-        plot.add(contr0(sexp_operator(rho_mu.force(mock_position))),
+        plot.add(contr0(sexp_op(rho_mu.force(mock_position))),
                  title="mu, sky data")
         plot.add(A_mu_sky.force(mock_position), title="mu_sky_power")
-        plot.add(contr2(sexp_operator(rho_nu.force(mock_position))),
+        plot.add(contr2(sexp_op(rho_nu.force(mock_position))),
                  title="nu, energy data")
         plot.add(A_nu_energy.force(mock_position), title="nu_energy_power")
-        plot.add(contr2(sexp_operator(rho_mu.force(mock_position))),
+        plot.add(contr2(sexp_op(rho_mu.force(mock_position))),
                  title="mu, energy data")
         plot.add(A_mu_energy.force(mock_position), title="mu_energy_power")
         plot.output(ny=2, ysize=6, xsize=16, name='truth.png')
     except:
         pass
     # Draw new samples to approximate the KL five times
-    for i in range(5):
-        # Draw new samples and minimize KL
+    for i in range(25):
         KL = ift.MetricGaussianKL(mean, H, N_samples)
-        KL, convergence = minimizer(KL)
-        mean = KL.position
 
-        # Plot current reconstruction
+        # Plot current
+        print(A_nu_sky.force(KL.position).val.min())
+        print(A_nu_sky.force(KL.position).val.max())
+        print(rho_nu.force(KL.position).val.min())
+        print(rho_nu.force(KL.position).val.max())
+        print(sexp_op(rho_nu).force(KL.position).val.min())
+        print(sexp_op(rho_nu).force(KL.position).val.max())
         plot = ift.Plot()
         plot.add(A_nu_sky.force(KL.position), title="nu_sky_power")
-        plot.add(contr0(rho_mu.force(KL.position)), title="mu, sky")
-        plot.add(contr2(rho_mu.force(KL.position)), title="mu, energy")
+        plot.add(contr0(sexp_op(rho_mu.force(KL.position))), title="mu, sky")
+        plot.add(contr2(sexp_op(rho_mu.force(KL.position))), title="mu, energy")
         plot.add(A_mu_sky.force(KL.position), title="mu_sky_power")
-        plot.add(contr0(rho_nu.force(KL.position)), title="nu, sky")
-        plot.add(contr2(rho_nu.force(KL.position)), title="nu, energy")
+        # plot.add(contr0(ift.exp(rho_nu.force(KL.position))), title="nu, sky")
+        plot.add(contr0(sexp_op(rho_nu.force(KL.position))), title="nu, sky", cmap=True)
+        plot.add(contr2(sexp_op(rho_nu.force(KL.position))), title="nu, energy")
         plot.output(ny=2,
                     ysize=6,
                     xsize=16,
                     name='iteration_' + str(i) + '.png')
+
+
+        # Draw new samples and minimize KL
+        KL, convergence = minimizer(KL)
+        mean = KL.position
+
     # Draw posterior samples
     KL = ift.MetricGaussianKL(mean, H, N_samples)
     sc = ift.StatCalculator()
