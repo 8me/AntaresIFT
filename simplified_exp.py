@@ -1,9 +1,28 @@
 import nifty5 as ift
+import numpy as np
 
-class _OpProd(ift.Operator):
-    def __init__(self, domain):
+
+class sexp(ift.Operator):
+    def __init__(self, domain, y):
         self._domain = domain
         self._target = domain
+        self._y = y
+
+    def _sexp(self, x):
+        retval = np.zeros(x.shape)
+        mask = x > self._y
+        retval[mask] = x[mask] - self._y
+        retval[np.logical_not(mask)] = np.exp(x[np.logical_not(mask)] -
+                                              self._y)
+        return retval
+
+    def _sexp_bar(self, x):
+        retval = np.zeros(x.shape)
+        mask = x > self._y
+        retval[mask] = 1
+        retval[np.logical_not(mask)] = np.exp(x[np.logical_not(mask)] -
+                                              self._y)
+        return retval
 
     def apply(self, x):
         self._check_input(x)
@@ -11,10 +30,10 @@ class _OpProd(ift.Operator):
         v = x._val if lin else x
 
         if not lin:
-            return
-        wm = x.want_metric
-        lin1 = self._op1(Linearization.make_var(v1, wm))
-        lin2 = self._op2(Linearization.make_var(v2, wm))
-        op = (makeOp(lin1._val)(lin2._jac))._myadd(
-            makeOp(lin2._val)(lin1._jac), False)
-        return lin1.new(lin1._val*lin2._val, op(x.jac))
+            sex_field = ift.Field(self._domain, self._sexp(v.val))
+            return sex_field
+        else:
+            sex_field = ift.Field(self._domain, self._sexp(v.val))
+            dop = ift.makeOp(ift.Field(self._domain,
+                                       self._sexp_bar(v.val)))(x.jac)
+            return x.new(sex_field, dop)
