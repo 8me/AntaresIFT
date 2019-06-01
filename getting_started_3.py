@@ -119,7 +119,7 @@ def cos_sq(theta):
     if theta >= 0 and theta < np.pi / 2:
         return np.cos(theta)**2
     else:
-        return 0.
+        return 1e-5
 
 
 def make_muon_distribution_array(nside):
@@ -140,8 +140,7 @@ if __name__ == '__main__':
     position_space = ift.DomainTuple.make(
         (sky_domain, energy_domain))  # lambda_domain, time_domain))
 
-    data_space = ift.DomainTuple.make(
-        (sky_domain,     energy_domain))
+    data_space = ift.DomainTuple.make((sky_domain, energy_domain))
     harmonic_space_sky = sky_domain.get_default_codomain()
     ht_sky = ift.HarmonicTransformOperator(harmonic_space_sky, sky_domain)
     power_space_sky = ift.PowerSpace(harmonic_space_sky)
@@ -177,7 +176,7 @@ if __name__ == '__main__':
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -5,  # preferred power-law slope
+        'sm': -3,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
         'im': 10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': 2,  # y-intercept variance
@@ -193,7 +192,7 @@ if __name__ == '__main__':
         'k0': .4,  # quefrency mode below which cepstrum flattens
 
         # Power-law part of spectrum:
-        'sm': -5,  # preferred power-law slope
+        'sm': -3,  # preferred power-law slope
         'sv': .5,  # low variance of power-law slope
         'im': 10,  # y-intercept mean, in-/decrease for more/less contrast
         'iv': 2,  # y-intercept variance
@@ -324,8 +323,9 @@ if __name__ == '__main__':
                              domain=position_space,
                              spaces=0)
     sexp_op = sexp(position_space, 1)
-    ift.extra.check_jacobian_consistency(sexp_op, ift.from_random('normal', sexp_op.domain))
-    signal = sexp_op(rho_nu) + R(sexp_op(rho_mu))
+    ift.extra.check_jacobian_consistency(
+        sexp_op, ift.from_random('normal', sexp_op.domain))
+    signal = sexp_op(rho_nu) + sexp_op(rho_mu)
     # signal = ift.exp(rho_nu)
     log.info('Signal ready')
     # Build the line-of-sight response and define signal response
@@ -349,8 +349,7 @@ if __name__ == '__main__':
     data = ift.Field.from_global_data(data_space, file_data)
     log.info('File data loaded')
 
-    plot_pspec(data_space, data, ht_list, contractor_list,
-               ['sky', 'energy'])
+    plot_pspec(data_space, data, ht_list, contractor_list, ['sky', 'energy'])
     # data = contr0(data)
 
     # find_parameters([-2, -5],
@@ -421,16 +420,19 @@ if __name__ == '__main__':
         plot = ift.Plot()
         plot.add(A_nu_sky.force(KL.position), title="nu_sky_power")
         plot.add(contr0(sexp_op(rho_mu.force(KL.position))), title="mu, sky")
-        plot.add(contr2(sexp_op(rho_mu.force(KL.position))), title="mu, energy")
+        plot.add(contr2(sexp_op(rho_mu.force(KL.position))),
+                 title="mu, energy")
         plot.add(A_mu_sky.force(KL.position), title="mu_sky_power")
         # plot.add(contr0(ift.exp(rho_nu.force(KL.position))), title="nu, sky")
-        plot.add(contr0(sexp_op(rho_nu.force(KL.position))), title="nu, sky", cmap=True)
-        plot.add(contr2(sexp_op(rho_nu.force(KL.position))), title="nu, energy")
+        plot.add(contr0(sexp_op(rho_nu.force(KL.position))),
+                 title="nu, sky",
+                 cmap=True)
+        plot.add(contr2(sexp_op(rho_nu.force(KL.position))),
+                 title="nu, energy")
         plot.output(ny=2,
                     ysize=6,
                     xsize=16,
                     name='iteration_' + str(i) + '.png')
-
 
         # Draw new samples and minimize KL
         KL, convergence = minimizer(KL)
